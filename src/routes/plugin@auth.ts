@@ -30,32 +30,34 @@ export const getAuth = (
   });
 
 export const { onRequest, useAuthSession, useAuthSignin, useAuthSignout } =
-  serverAuth$(({ env }) => ({
-    secret: env.get("AUTH_SECRET"),
-    trustHost: true,
-    providers: getProviders(env),
-    callbacks: {
-      signIn: async ({ user }) => {
-        const db = await getDatabase(env);
+  serverAuth$(({ env }) => {
+    return {
+      secret: env.get("AUTH_SECRET") ?? process.env.AUTH_SECRET,
+      trustHost: true,
+      providers: getProviders(env),
+      callbacks: {
+        signIn: async ({ user }) => {
+          const db = await getDatabase(env);
 
-        if (!user.email) {
-          return false;
-        }
+          if (!user.email) {
+            return false;
+          }
 
-        const foundUser = await db
-          .select({ id: users.id })
-          .from(users)
-          .where(eq(users.email, user.email))
-          .get();
+          const foundUser = await db
+            .select({ id: users.id })
+            .from(users)
+            .where(eq(users.email, user.email))
+            .get();
 
-        if (!foundUser) {
-          await db
-            .insert(users)
-            .values({ id: user.id, name: user.name, email: user.email })
-            .run();
-        }
+          if (!foundUser) {
+            await db
+              .insert(users)
+              .values({ id: user.id, name: user.name, email: user.email })
+              .run();
+          }
 
-        return true;
+          return true;
+        },
       },
-    },
-  }));
+    };
+  });
