@@ -1,93 +1,76 @@
 import { component$, useSignal } from "@builder.io/qwik";
 import {
-	Form,
-	routeAction$,
-	routeLoader$,
-	z,
-	zod$,
-	type DocumentHead,
+  Form,
+  routeLoader$,
+  server$,
+  type DocumentHead,
 } from "@builder.io/qwik-city";
 import { eq } from "drizzle-orm";
 import { getDatabase, todos, users } from "~/db";
-import Modal from "~/integrations/react/Modal";
 import {
-	getAuth,
-	useAuthSession,
-	useAuthSignin,
-	useAuthSignout,
+  getAuth,
+  useAuthSession,
+  useAuthSignin,
+  useAuthSignout,
 } from "./plugin@auth";
 
 export const useTodos = routeLoader$(async (req) => {
-  const db = getDatabase(req.env);
+  const db = await getDatabase(req.env);
   const auth = await getAuth(req);
 
   if (!auth?.user?.email) return [];
 
-	
-  const user = await db
-	.select({ id: users.id })
-    .from(users)
-    .where(eq(users.email, auth.user.email))
-    .get();
-		
-	if (!user) return [];
+  const user = await db.query.users.findFirst({
+    where: eq(users.email, auth.user.email),
+  });
 
-  const items = await db
-    .select({
-      id: todos.id,
-      title: todos.title,
-      description: todos.description,
-      user: { id: users.id, name: users.name },
-    })
-    .from(todos)
-    .leftJoin(users, eq(users.id, todos.userId))
-    .where(eq(users.id, user.id))
-    .all();
+  if (!user) return [];
+
+  const items = await db.query.todos.findMany({
+    with: {
+      user: true,
+    },
+  });
 
   return items;
 });
 
-export const useCreateTodo = routeAction$(async (_, req) => {
-  const auth = await getAuth(req);
-  const db = getDatabase(req.env);
+export const createTodo = server$(async function () {
+  const auth = await getAuth(this);
+  const db = await getDatabase(this.env);
 
   if (!auth?.user?.email) return;
 
-  const user = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.email, auth.user.email))
-    .get();
+  const user = await db.query.users.findFirst({
+    where: eq(users.email, auth.user.email),
+  });
 
   if (!user) return;
 
   const newTodo = await db
     .insert(todos)
     .values({ title: "Some New Todo", userId: user.id, description: "" })
-    .run();
+    .returning()
+    .get();
 
-
-  return newTodo;
+  return { ...newTodo, user };
 });
 
-export const useDeleteTodo = routeAction$(async ({ todoId }, req) => {
-  const auth = await getAuth(req);
-  const db = getDatabase(req.env);
+export const deleteTodo = server$(async function (todoId: number) {
+  const auth = await getAuth(this);
+  const db = await getDatabase(this.env);
 
   if (!auth?.user) return;
 
   await db.delete(todos).where(eq(todos.id, todoId)).run();
-}, zod$({ todoId: z.coerce.number() }));
+});
 
 export default component$(() => {
   const signIn = useAuthSignin();
   const authSession = useAuthSession();
-  const items = useTodos();
-  const createTodo = useCreateTodo();
-  const deleteTodo = useDeleteTodo();
-  const modalOpen = useSignal(false);
+  const initialItems = useTodos();
+  const items = useSignal(initialItems.value);
   const signOut = useAuthSignout();
-  const numberValue = useSignal(0);
 
   return (
     <div class="my-16 space-y-8">
@@ -109,55 +92,47 @@ export default component$(() => {
           </Form>
         )}
         {authSession.value !== null && (
-          <Form action={signOut}>
+          <>
+            <Form action={signOut}>
+              <button
+                type="submit"
+                class="bg-gray-100 font-medium text-sm px-4 py-1 transition hover:bg-gray-200 duration-75 rounded-full"
+              >
+                Sign Out
+              </button>
+            </Form>
             <button
               type="submit"
-              class="bg-gray-100 font-medium text-sm px-4 py-1 transition hover:bg-gray-200 duration-75 rounded-full"
+              class="bg-blue-100 font-medium text-sm px-4 py-1 transition hover:bg-blue-200 duration-75 rounded-full"
+              onClick$={async () => {
+                const newTodo = await createTodo();
+                if (newTodo) {
+                  items.value = [...items.value, newTodo];
+                }
+              }}
             >
-              Sign Out
+              Create Todo
             </button>
-          </Form>
+          </>
         )}
-        <Form action={createTodo}>
-          <button
-            type="submit"
-            class="bg-blue-100 font-medium text-sm px-4 py-1 transition hover:bg-blue-200 duration-75 rounded-full"
-          >
-            Create Todo
-          </button>
-        </Form>
-        <button
-          class="bg-green-100 font-medium text-sm px-4 py-1 transition hover:bg-green-200 duration-75 rounded-full"
-          onClick$={() => (modalOpen.value = true)}
-        >
-          Open Modal
-        </button>
       </div>
-      <Modal
-        open={modalOpen.value}
-        onOpenChange$={(value) => {
-          modalOpen.value = value;
-        }}
-        client:load
-      >
-        <button onClick$={() => numberValue.value++}>INCREMENT</button>
-        <p>{numberValue.value}</p>
-      </Modal>
+
       {items.value.length > 0 && (
         <div class="mx-auto max-w-2xl border rounded-xl divide-y overflow-hidden">
           {items.value.map((t) => (
-            <Form key={t.id} action={deleteTodo}>
-              <input type="hidden" name="todoId" value={t.id} />
-              <button
-                class="py-6 px-8 text-sm hover:bg-gray-50 transition duration-75 w-full h-full text-left"
-                type="submit"
-              >
-                <p class="font-medium">
-                  #{t.id} - {t.title}
-                </p>
-                <p class="text-xs text-gray-600">{t.user?.name}</p>
-              </button>
-            </Form>
+            <button
+              key={t.id}
+              onClick$={async () => {
+                await deleteTodo(t.id);
+                items.value = items.value.filter((e) => e.id !== t.id);
+              }}
+              class="py-6 px-8 text-sm hover:bg-gray-50 transition duration-75 w-full h-full text-left"
+            >
+              <p class="font-medium">
+                #{t.id} - {t.title}
+              </p>
+              <p class="text-xs text-gray-600">{t.user?.name}</p>
+            </button>
           ))}
         </div>
       )}
@@ -171,7 +146,7 @@ export default component$(() => {
 });
 
 export const head: DocumentHead = {
-  title: "Welcome to Qwik",
+  title: "Qwik Starter",
   meta: [
     {
       name: "description",

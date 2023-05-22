@@ -1,6 +1,6 @@
-import { sql } from "drizzle-orm";
+import type { InferModel } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
@@ -8,8 +8,12 @@ export const users = sqliteTable("users", {
   email: text("email"),
 });
 
-export const insertUserSchema = createInsertSchema(users);
-export const selectUserSchema = createSelectSchema(users);
+export const usersRelations = relations(users, ({ many }) => ({
+  todos: many(todos),
+}));
+
+export type User = InferModel<typeof users, "select">;
+export type NewUser = InferModel<typeof users, "insert">;
 
 export const todos = sqliteTable("events", {
   id: integer("id").primaryKey(),
@@ -24,5 +28,9 @@ export const todos = sqliteTable("events", {
   userId: text("user_id").notNull(),
 });
 
-export const insertTodoSchema = createInsertSchema(todos);
-export const selectTodoSchema = createSelectSchema(todos);
+export const postsRelations = relations(todos, ({ one }) => ({
+  user: one(users, { fields: [todos.userId], references: [users.id] }),
+}));
+
+export type Todo = InferModel<typeof todos, "select">;
+export type NewTodo = InferModel<typeof todos, "insert">;

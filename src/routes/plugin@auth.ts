@@ -2,7 +2,11 @@ import type { AuthConfig } from "@auth/core";
 import type { Provider } from "@auth/core/providers";
 import GitHub from "@auth/core/providers/github";
 import { getSessionData, serverAuth$ } from "@builder.io/qwik-auth";
-import type { RequestEvent, RequestEventAction } from "@builder.io/qwik-city";
+import type {
+  RequestEvent,
+  RequestEventAction,
+  RequestEventBase,
+} from "@builder.io/qwik-city";
 import { eq } from "drizzle-orm";
 import { getDatabase, users } from "~/db";
 
@@ -17,7 +21,7 @@ const getProviders = <T extends { get: (v: string) => string | undefined }>(
   ] as Provider[];
 
 export const getAuth = (
-  req: RequestEvent | RequestEventAction,
+  req: RequestEvent | RequestEventAction | RequestEventBase,
   config?: AuthConfig
 ) =>
   getSessionData(req.request, {
@@ -32,7 +36,7 @@ export const { onRequest, useAuthSession, useAuthSignin, useAuthSignout } =
     providers: getProviders(env),
     callbacks: {
       signIn: async ({ user }) => {
-        const db = getDatabase(env);
+        const db = await getDatabase(env);
 
         if (!user.email) {
           return false;
