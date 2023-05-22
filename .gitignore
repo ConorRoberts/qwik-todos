@@ -40,3 +40,6 @@ lerna-debug.log*
 
 .env**
 dev-sqlite.db
+
+# Cloudflare
+functions/**/*.js

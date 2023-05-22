@@ -14,11 +14,11 @@ export const getDatabase = async <
   };
 
   // Development - Use local SQLite file with regular libSQL client
-  if (import.meta.env.DEV) {
-    const { createClient } = await import("@libsql/client");
+  // if (import.meta.env.DEV || process.env.NODE_ENV === "development") {
+  //   const { createClient } = await import("@libsql/client");
 
-    return drizzle(createClient(vars), { schema });
-  }
+  //   return drizzle(createClient(vars), { schema });
+  // }
 
   // Production - Use remote DB with edge-compatible web client
   return drizzle(createWebClient(vars), { schema });
