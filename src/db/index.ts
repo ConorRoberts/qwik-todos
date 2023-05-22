@@ -10,7 +10,7 @@ export const getDatabase = async <
 ) => {
   const vars = {
     url: z.string().parse(env.get("DATABASE_URL")),
-    authToken: z.string().parse(env.get("DATABASE_URL")),
+    authToken: z.string().parse(env.get("DATABASE_AUTH_TOKEN")),
   };
 
   // Development - Use local SQLite file with regular libSQL client
