@@ -27,6 +27,7 @@ export const useTodos = routeLoader$(async (req) => {
   if (!user) return [];
 
   const items = await db.query.todos.findMany({
+    where: eq(todos.userId, user.id),
     with: {
       user: true,
     },
